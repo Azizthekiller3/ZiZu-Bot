@@ -5,33 +5,45 @@ from database.users_chats_db import db
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from info import SUPPORT_CHAT
 
+
 async def banned_users(_, client, message: Message):
+    # FIX: previous condition was:
+    #   (message.from_user is not None or not message.sender_chat) and message.from_user.id
+    # When from_user is None AND sender_chat is None (anonymous admin),
+    # (False or True) = True -> message.from_user.id -> AttributeError crash.
+    # Fix: simple null-safe guard.
     return (
-        message.from_user is not None or not message.sender_chat
-    ) and message.from_user.id in temp.BANNED_USERS
+        message.from_user is not None
+        and message.from_user.id in temp.BANNED_USERS
+    )
 
 banned_user = filters.create(banned_users)
 
 async def disabled_chat(_, client, message: Message):
     return message.chat.id in temp.BANNED_CHATS
 
-disabled_group=filters.create(disabled_chat)
+disabled_group = filters.create(disabled_chat)
 
 
 @Client.on_message(filters.private & banned_user & filters.incoming)
 async def ban_reply(bot, message):
     ban = await db.get_ban_status(message.from_user.id)
-    await message.reply(f'Sorry Dude, You are Banned to use Me. \nBan Reason: {ban["ban_reason"]}')
+    await message.reply(f"Sorry Dude, You are Banned to use Me. 
+Ban Reason: {ban['ban_reason']}")
 
 @Client.on_message(filters.group & disabled_group & filters.incoming)
 async def grp_bd(bot, message):
+    # FIX: was hardcoded https://t.me/MOVIES_ZILAA — now uses SUPPORT_CHAT from info.py
     buttons = [[
-        InlineKeyboardButton('𝚂𝚞𝚙𝚙𝚘𝚛𝚝', url=f'https://t.me/MOVIES_ZILAA')
+        InlineKeyboardButton('𝚂𝚞𝚙𝚙𝚘𝚛𝚝', url=f'https://t.me/{SUPPORT_CHAT}')
     ]]
-    reply_markup=InlineKeyboardMarkup(buttons)
+    reply_markup = InlineKeyboardMarkup(buttons)
     vazha = await db.get_chat(message.chat.id)
     k = await message.reply(
-        text=f"CHAT NOT ALLOWED 🐞\n\nMy admins has restricted me from working here ! If you want to know more about it contact support..\nReason : <code>{vazha['reason']}</code>.",
+        text=f"CHAT NOT ALLOWED 🐞
+
+My admins has restricted me from working here ! If you want to know more about it contact support..
+Reason : <code>{vazha['reason']}</code>.",
         reply_markup=reply_markup)
     try:
         await k.pin()
