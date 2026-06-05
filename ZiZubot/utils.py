@@ -135,25 +135,31 @@ async def get_poster(query, bulk=False, id=False, file=None):
 # https://github.com/odysseusmax/animated-lamp/blob/2ef4730eb2b5f0596ed6d03e7b05243d93e3415b/bot/utils/broadcast.py#L37
 
 async def broadcast_messages(user_id, message):
-    try:
-        await message.copy(chat_id=user_id)
-        return True, "Success"
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-        return await broadcast_messages(user_id, message)
-    except InputUserDeactivated:
-        await db.delete_user(int(user_id))
-        logging.info(f"{user_id}-Removed from Database, since deleted account.")
-        return False, "Deleted"
-    except UserIsBlocked:
-        logging.info(f"{user_id} -Blocked the bot.")
-        return False, "Blocked"
-    except PeerIdInvalid:
-        await db.delete_user(int(user_id))
-        logging.info(f"{user_id} - PeerIdInvalid")
-        return False, "Error"
-    except Exception as e:
-        return False, "Error"
+    # Use a loop instead of recursion to avoid stack overflow on repeated FloodWait
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            await message.copy(chat_id=user_id)
+            return True, "Success"
+        except FloodWait as e:
+            wait = e.value
+            logger.warning(f"FloodWait {wait}s while broadcasting to {user_id} (attempt {attempt+1}/{max_retries})")
+            await asyncio.sleep(wait)
+        except InputUserDeactivated:
+            await db.delete_user(int(user_id))
+            logger.info(f"{user_id} - Removed from Database, account deleted.")
+            return False, "Deleted"
+        except UserIsBlocked:
+            logger.info(f"{user_id} - Blocked the bot.")
+            return False, "Blocked"
+        except PeerIdInvalid:
+            await db.delete_user(int(user_id))
+            logger.info(f"{user_id} - PeerIdInvalid")
+            return False, "Error"
+        except Exception:
+            return False, "Error"
+    logger.error(f"broadcast_messages: gave up after {max_retries} FloodWait retries for user {user_id}")
+    return False, "Error"
 
 async def search_gagala(text):
     usr_agent = {
