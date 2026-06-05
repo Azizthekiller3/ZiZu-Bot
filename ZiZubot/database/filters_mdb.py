@@ -6,7 +6,6 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
-# ✅ FIX: Use async Motor client instead of blocking sync pymongo
 myclient = AsyncIOMotorClient(DATABASE_URI)
 mydb = myclient[DATABASE_NAME]
 
@@ -27,16 +26,19 @@ async def add_filter(grp_id, text, reply_text, btn, file, alert):
 
 
 async def find_filter(group_id, name):
+    """Return (reply_text, btn, alert, fileid) or (None, None, None, None) if not found."""
     mycol = mydb[str(group_id)]
-    query = mycol.find({"text": name})
     try:
-        async for file in query:
-            reply_text = file['reply']
-            btn = file['btn']
-            fileid = file['file']
-            alert = file.get('alert')
-        return reply_text, btn, alert, fileid
+        # FIX: use find_one instead of find+loop so variables are never unbound.
+        # The old code assigned variables inside an async-for body and returned them
+        # outside the loop — if no document matched, UnboundLocalError was silently
+        # swallowed by the bare except, which is confusing and fragile.
+        file = await mycol.find_one({"text": name})
+        if file is None:
+            return None, None, None, None
+        return file['reply'], file['btn'], file.get('alert'), file['file']
     except Exception:
+        logger.exception('find_filter error for group %s name %s', group_id, name)
         return None, None, None, None
 
 
@@ -81,7 +83,6 @@ async def del_all(message, group_id, title):
 
 async def count_filters(group_id):
     mycol = mydb[str(group_id)]
-    # ✅ FIX: deprecated mycol.count() → count_documents({})
     count = await mycol.count_documents({})
     return False if count == 0 else count
 
@@ -94,7 +95,6 @@ async def filter_stats():
     totalcount = 0
     for collection in collections:
         mycol = mydb[collection]
-        # ✅ FIX: deprecated mycol.count() → count_documents({})
         totalcount += await mycol.count_documents({})
 
     return len(collections), totalcount
