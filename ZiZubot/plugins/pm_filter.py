@@ -173,15 +173,15 @@ async def next_page(bot, query):
         btn = [
             [InlineKeyboardButton(
                 text=f"📁[{get_size(file.file_size)}]-🎭-{file.file_name}",
-                callback_data=f'files#{file.file_id}'
+                callback_data=f'{pre}#{file.file_id}'
             )]
             for file in files
         ]
     else:
         btn = [
             [
-                InlineKeyboardButton(text=f"{file.file_name}",          callback_data=f'files#{file.file_id}'),
-                InlineKeyboardButton(text=f"{get_size(file.file_size)}", callback_data=f'files#{file.file_id}'),
+                InlineKeyboardButton(text=f"{file.file_name}",          callback_data=f'{pre}#{file.file_id}'),
+                InlineKeyboardButton(text=f"{get_size(file.file_size)}", callback_data=f'{pre}#{file.file_id}'),
             ]
             for file in files
         ]
@@ -231,7 +231,7 @@ async def advantage_spoll_choker(bot, query):
         return await safe_answer(query, "Search for Yourself🔎", show_alert=True)
     if movie_ == "close_spellcheck":
         return await query.message.delete()
-    movies = SPELL_CHECK.get(query.message.reply_to_message.id)
+    movies = SPELL_CHECK.get(query.message.reply_to_message.id if query.message.reply_to_message else None)
     if not movies:
         return await safe_answer(query, script.OLD_MES, show_alert=True)
     movie = movies[(int(movie_))]
@@ -587,7 +587,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 )
             except Exception as e:
                 logger.exception(e)
-            f_caption = f_caption
         if f_caption is None:
             f_caption = f"{files.file_name}"
 
@@ -619,16 +618,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         parse_mode=enums.ParseMode.HTML
                     )
                     return
+                # Shortlink API failed — fall through and send file directly
             # ──────────────────────────────────────────────────────────────
 
-            else:
-                await client.send_cached_media(
-                    chat_id=query.from_user.id,
-                    file_id=file_id,
-                    caption=f_caption,
-                    protect_content=True if ident == "filep" else False
-                )
-                await safe_answer(query, '**Already Sent In your Pm**', show_alert=True)
+            await client.send_cached_media(
+                chat_id=query.from_user.id,
+                file_id=file_id,
+                caption=f_caption,
+                protect_content=True if ident == "filep" else False
+            )
+            await safe_answer(query, '**Already Sent In your Pm**', show_alert=True)
         except UserIsBlocked:
             await safe_answer(query, 'Unblock the bot mahn !', show_alert=True)
         except PeerIdInvalid:
@@ -943,6 +942,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 async def auto_filter(client, msg, spoll=False):
     if not spoll:
         message = msg
+        if not message.text:
+            return
         if message.text.startswith("/"):
             return
         if re.findall(r"((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
