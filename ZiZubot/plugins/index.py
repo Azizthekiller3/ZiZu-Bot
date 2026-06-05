@@ -156,78 +156,95 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
     no_media = 0
     unsupported = 0
     async with lock:
-        try:
-            current = temp.CURRENT
-            temp.CANCEL = False
-            async for message in bot.iter_messages(chat, lst_msg_id, temp.CURRENT):
-                if temp.CANCEL:
-                    await msg.edit(
-                        "❌ <b>Indexing Cancelled</b>\n\n" + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
-                    )
-                    break
-                current += 1
-                if current % 20 == 0:
-                    can = [[InlineKeyboardButton('Cancel', callback_data='index_cancel')]]
-                    try:
-                        await msg.edit_text(
-                            text=(
-                                f"⏳ <b>Indexing…</b>  (<code>{current}</code> fetched)\n\n"
-                                + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
-                            ),
-                            reply_markup=InlineKeyboardMarkup(can)
+        current = temp.CURRENT
+        temp.CANCEL = False
+
+        # FIX: auto-resume loop — if FloodWait escapes iter_messages, sleep and retry
+        while True:
+            flood_hit = False
+            try:
+                async for message in bot.iter_messages(chat, lst_msg_id, temp.CURRENT):
+                    if temp.CANCEL:
+                        await msg.edit(
+                            "❌ <b>Indexing Cancelled</b>\n\n" + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
                         )
-                    except FloodWait as fw:
-                        await asyncio.sleep(fw.value)
-                    except Exception:
-                        pass
-                if message.empty:
-                    deleted += 1
-                    continue
-                elif not message.media:
-                    no_media += 1
-                    continue
-                elif message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.AUDIO, enums.MessageMediaType.DOCUMENT]:
-                    unsupported += 1
-                    continue
-                media = getattr(message, message.media.value, None)
-                if not media:
-                    unsupported += 1
-                    continue
-                media.file_type = message.media.value
-                media.caption = message.caption
-                try:
-                    aynav, vnay = await save_file(media)
-                except FloodWait as fw:
-                    logger.warning(f"FloodWait {fw.value}s while saving file — sleeping")
-                    await asyncio.sleep(fw.value)
+                        return
+                    current += 1
+                    if current % 20 == 0:
+                        can = [[InlineKeyboardButton('Cancel', callback_data='index_cancel')]]
+                        try:
+                            await msg.edit_text(
+                                text=(
+                                    f"⏳ <b>Indexing…</b>  (<code>{current}</code> fetched)\n\n"
+                                    + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+                                ),
+                                reply_markup=InlineKeyboardMarkup(can)
+                            )
+                        except FloodWait as fw:
+                            await asyncio.sleep(fw.value)
+                        except Exception:
+                            pass
+                    if message.empty:
+                        deleted += 1
+                        continue
+                    elif not message.media:
+                        no_media += 1
+                        continue
+                    elif message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.AUDIO, enums.MessageMediaType.DOCUMENT]:
+                        unsupported += 1
+                        continue
+                    media = getattr(message, message.media.value, None)
+                    if not media:
+                        unsupported += 1
+                        continue
+                    media.file_type = message.media.value
+                    media.caption = message.caption
                     try:
                         aynav, vnay = await save_file(media)
-                    except Exception:
+                    except FloodWait as fw:
+                        logger.warning(f"FloodWait {fw.value}s while saving file — sleeping")
+                        await asyncio.sleep(fw.value)
+                        try:
+                            aynav, vnay = await save_file(media)
+                        except Exception:
+                            errors += 1
+                            continue
+                    if aynav:
+                        total_files += 1
+                    elif vnay == 0:
+                        duplicate += 1
+                    elif vnay == 2:
                         errors += 1
-                        continue
-                if aynav:
-                    total_files += 1
-                elif vnay == 0:
-                    duplicate += 1
-                elif vnay == 2:
-                    errors += 1
-        except FloodWait as fw:
-            logger.warning(f"FloodWait {fw.value}s during iter_messages — indexing paused then resumed")
-            await asyncio.sleep(fw.value)
-            # Resume is not possible mid-iterator; report partial progress
-            await msg.edit(
-                f"⚠️ <b>Hit Telegram rate limit mid-index.</b> Partial progress saved.\n\n"
-                + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
-                + f"\n\n<i>Re-run /index from message ID <code>{current}</code> to continue.</i>"
-            )
-        except Exception as e:
-            logger.exception(e)
-            await msg.edit(
-                f"❌ <b>Indexing stopped due to an error.</b>\n\n"
-                + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
-            )
-        else:
-            await msg.edit(
-                "✅ <b>Indexing Complete!</b>\n\n"
-                + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
-            )
+
+            except FloodWait as fw:
+                # FIX: auto-resume instead of stopping — update CURRENT and retry the loop
+                wait_secs = fw.value + 5
+                logger.warning(f"FloodWait {fw.value}s during indexing — auto-resuming from msg {current} after {wait_secs}s")
+                temp.CURRENT = current
+                flood_hit = True
+                try:
+                    await msg.edit(
+                        f"⏸ <b>Rate limit hit — auto-resuming in {wait_secs}s…</b>\n\n"
+                        + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+                        + f"\n\n<i>Resuming from message ID <code>{current}</code></i>"
+                    )
+                except Exception:
+                    pass
+                await asyncio.sleep(wait_secs)
+
+            except Exception as e:
+                logger.exception(e)
+                await msg.edit(
+                    f"❌ <b>Indexing stopped due to an error.</b>\n\n"
+                    + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+                )
+                return
+
+            if not flood_hit:
+                # Completed without FloodWait — done
+                break
+
+        await msg.edit(
+            "✅ <b>Indexing Complete!</b>\n\n"
+            + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+        )
