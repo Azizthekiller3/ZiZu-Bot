@@ -3,7 +3,7 @@ import datetime
 import time
 from database.users_chats_db import db
 from info import ADMINS
-from utils import broadcast_messages
+from utils import broadcast_messages, temp
 import asyncio
         
 @Client.on_message(filters.command("broadcast") & filters.user(ADMINS) & filters.reply)
@@ -23,6 +23,9 @@ async def verupikkals(bot, message):
 
     success = 0
     async for user in users:
+        if int(user['id']) in temp.BANNED_USERS:
+            done += 1
+            continue
         pti, sh = await broadcast_messages(int(user['id']), b_msg)
         if pti:
             success += 1
