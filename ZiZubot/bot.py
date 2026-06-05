@@ -9,6 +9,7 @@ logging.getLogger("imdbpy").setLevel(logging.ERROR)
 
 from pyrogram import Client, __version__
 from pyrogram.raw.all import layer
+from pyrogram.errors import FloodWait
 from database.ia_filterdb import Media
 from database.users_chats_db import db
 from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR, LOG_CHANNEL
@@ -23,7 +24,6 @@ from aiohttp import web as webserver
 
 async def schedule_restart():
     await asyncio.sleep(86400)  # 24 hours
-    # Restart the bot
     os.execv(sys.executable, ['python'] + sys.argv)
 
 class Bot(Client):
@@ -52,56 +52,60 @@ class Bot(Client):
         self.username = '@' + me.username
         logging.info(f"{me.first_name} with for Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
         logging.info(LOG_STR)
-        await self.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT)#RESTART SND IN LOG_CHANNEL
+        # FIX: wrap LOG_CHANNEL message so a bad channel ID doesn't crash before webserver starts
+        try:
+            await self.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT)
+        except Exception as e:
+            logging.warning(f"Could not send restart message to LOG_CHANNEL ({LOG_CHANNEL}): {e}")
         print("ZiZuBot™ is running!")
-        
+
         client = webserver.AppRunner(await bot_run())
         await client.setup()
         bind_address = "0.0.0.0"
         port = int(environ.get("PORT", 8000))
         await webserver.TCPSite(client, bind_address, port).start()
         logging.info(f"Web health-check running on port {port}")
-        asyncio.create_task(schedule_restart()) #restart after 24 hrs clearing memory
+        asyncio.create_task(schedule_restart())
 
     async def stop(self, *args):
         await super().stop()
         logging.info("Bot stopped. Bye.")
-    
+
     async def iter_messages(
         self,
         chat_id: Union[int, str],
         limit: int,
         offset: int = 0,
     ) -> Optional[AsyncGenerator["types.Message", None]]:
-        """Iterate through a chat sequentially.
-        This convenience method does the same as repeatedly calling :meth:`~pyrogram.Client.get_messages` in a loop, thus saving
-        you from the hassle of setting up boilerplate code. It is useful for getting the whole chat messages with a
-        single call.
+        """Iterate through a chat sequentially, fetching in batches of up to 200.
+        Handles FloodWait internally so indexing is never aborted by rate limits.
+
         Parameters:
-            chat_id (``int`` | ``str``):
-                Unique identifier (int) or username (str) of the target chat.
-                For your personal cloud (Saved Messages) you can simply use "me" or "self".
-                For a contact that exists in your Telegram address book you can use his phone number (str).
-                
-            limit (``int``):
-                Identifier of the last message to be returned.
-                
-            offset (``int``, *optional*):
-                Identifier of the first message to be returned.
-                Defaults to 0.
-        Returns:
-            ``Generator``: A generator yielding :obj:`~pyrogram.types.Message` objects.
-        Example:
-            .. code-block:: python
-                for message in app.iter_messages("pyrogram", 1, 15000):
-                    print(message.text)
+            chat_id: Unique identifier or username of the target chat.
+            limit:   ID of the last message to fetch (inclusive upper bound).
+            offset:  ID of the first message to fetch (default 0).
         """
         current = offset
         while True:
+            # FIX: was current+new_diff+1 (off-by-one — fetched one extra per batch)
             new_diff = min(200, limit - current)
             if new_diff <= 0:
                 return
-            messages = await self.get_messages(chat_id, list(range(current, current+new_diff+1)))
+            ids = list(range(current, current + new_diff))
+            # FIX: handle FloodWait inside the generator so it doesn't abort indexing
+            try:
+                messages = await self.get_messages(chat_id, ids)
+            except FloodWait as fw:
+                logging.warning(f"FloodWait {fw.value}s in iter_messages — sleeping then retrying batch")
+                await asyncio.sleep(fw.value + 2)
+                try:
+                    messages = await self.get_messages(chat_id, ids)
+                except Exception as e:
+                    logging.error(f"iter_messages batch failed after FloodWait retry: {e}")
+                    return
+            except Exception as e:
+                logging.error(f"iter_messages get_messages error: {e}")
+                return
             for message in messages:
                 yield message
                 current += 1
