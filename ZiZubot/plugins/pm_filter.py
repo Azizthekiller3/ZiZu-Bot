@@ -33,6 +33,10 @@ BUTTONS = {}
 SPELL_CHECK = {}
 FRESH = {}
 
+# Restricted eval namespace — only allows InlineKeyboardButton constructor.
+# Prevents arbitrary code execution if the MongoDB filter collection is compromised.
+_BTN_EVAL_NS = {"__builtins__": {}, "InlineKeyboardButton": InlineKeyboardButton}
+
 # ✅ FIX: Max size for in-memory dicts — oldest entries dropped when limit hit
 _MAX_DICT_SIZE = 500
 
@@ -1114,7 +1118,10 @@ async def advantage_spell_chok(client, msg):
             reply_to_message_id=msg.id
         )
         await asyncio.sleep(45)
-        await k.delete()
+        try:
+            await k.delete()
+        except Exception:
+            pass
         return
 
     if not movies:
@@ -1133,7 +1140,10 @@ async def advantage_spell_chok(client, msg):
             reply_to_message_id=msg.id
         )
         await asyncio.sleep(60)
-        await k.delete()
+        try:
+            await k.delete()
+        except Exception:
+            pass
         return
 
     movielist = [movie.get('title') for movie in movies]
@@ -1157,7 +1167,10 @@ async def advantage_spell_chok(client, msg):
         reply_to_message_id=msg.id
     )
     await asyncio.sleep(50)
-    await spell_check_del.delete()
+    try:
+        await spell_check_del.delete()
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1188,7 +1201,7 @@ async def manual_filters(client, message, text=False):
                                 reply_to_message_id=reply_id
                             )
                         else:
-                            button = eval(btn)
+                            button = eval(btn, _BTN_EVAL_NS)
                             await client.send_message(
                                 group_id,
                                 reply_text,
@@ -1204,7 +1217,7 @@ async def manual_filters(client, message, text=False):
                             reply_to_message_id=reply_id
                         )
                     else:
-                        button = eval(btn)
+                        button = eval(btn, _BTN_EVAL_NS)
                         await message.reply_cached_media(
                             fileid,
                             caption=reply_text or "",
