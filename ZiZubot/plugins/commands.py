@@ -82,41 +82,10 @@ async def start(client, message):
         )
         return
 
-    if AUTH_CHANNEL and not await is_subscribed(client, message):
-        try:
-            await client.get_chat(int(AUTH_CHANNEL))  # resolve peer first
-            invite_link = await client.create_chat_invite_link(int(AUTH_CHANNEL))
-        except ChatAdminRequired:
-            logger.error("Make sure Bot is admin in Forcesub channel")
-            return
-        except ValueError as e:
-            logger.error(f"Invalid AUTH_CHANNEL ID: {AUTH_CHANNEL} → {e}")
-            return
-        except Exception as e:
-            logger.error(f"Failed to create invite link: {e}")
-            return
-        btn = [
-            [
-                InlineKeyboardButton("🤖 Join Updates Channel", url=invite_link.invite_link)
-            ]
-        ]
-        if message.command[1] != "subscribe":
-            try:
-                kk, file_id = message.command[1].split("_", 1)
-                pre = 'checksubp' if kk == 'filep' else 'checksub'
-                btn.append([InlineKeyboardButton(" 🔄 Try Again", callback_data=f"{pre}#{file_id}")])
-            except (IndexError, ValueError):
-                btn.append([InlineKeyboardButton(" 🔄 Try Again", url=f"https://t.me/{temp.U_NAME}?start={message.command[1]}")])
-        await client.send_message(
-            chat_id=message.from_user.id,
-            text="**Please Join My Updates Channel to use this Bot!**",
-            reply_markup=InlineKeyboardMarkup(btn),
-            parse_mode=enums.ParseMode.MARKDOWN
-        )
-        return
-        
-        # etc.py link feature !!!>>> import pmfilter autofilter fn()
     # ── Shortlink verification return ──────────────────────────────────────────
+    # IMPORTANT: must run BEFORE the forced-subscribe check so that a user who
+    # completed the shortlink challenge can always redeem their verify token,
+    # even if they are not yet subscribed to the AUTH_CHANNEL.
     if len(message.command) == 2 and message.command[1].startswith("verify_"):
         token = message.command[1][len("verify_"):]
         ident, file_id = await consume_token(token, message.from_user.id)
@@ -150,6 +119,39 @@ async def start(client, message):
         )
         return
     # ──────────────────────────────────────────────────────────────────────────
+
+    if AUTH_CHANNEL and not await is_subscribed(client, message):
+        try:
+            await client.get_chat(int(AUTH_CHANNEL))  # resolve peer first
+            invite_link = await client.create_chat_invite_link(int(AUTH_CHANNEL))
+        except ChatAdminRequired:
+            logger.error("Make sure Bot is admin in Forcesub channel")
+            return
+        except ValueError as e:
+            logger.error(f"Invalid AUTH_CHANNEL ID: {AUTH_CHANNEL} → {e}")
+            return
+        except Exception as e:
+            logger.error(f"Failed to create invite link: {e}")
+            return
+        btn = [
+            [
+                InlineKeyboardButton("🤖 Join Updates Channel", url=invite_link.invite_link)
+            ]
+        ]
+        if message.command[1] != "subscribe":
+            try:
+                kk, file_id = message.command[1].split("_", 1)
+                pre = 'checksubp' if kk == 'filep' else 'checksub'
+                btn.append([InlineKeyboardButton(" 🔄 Try Again", callback_data=f"{pre}#{file_id}")])
+            except (IndexError, ValueError):
+                btn.append([InlineKeyboardButton(" 🔄 Try Again", url=f"https://t.me/{temp.U_NAME}?start={message.command[1]}")])
+        await client.send_message(
+            chat_id=message.from_user.id,
+            text="**Please Join My Updates Channel to use this Bot!**",
+            reply_markup=InlineKeyboardMarkup(btn),
+            parse_mode=enums.ParseMode.MARKDOWN
+        )
+        return
 
     if len(message.command) == 2 and message.command[1].startswith('getfile'):
         searches = message.command[1].split("-", 1)[1]
