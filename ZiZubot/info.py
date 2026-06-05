@@ -12,11 +12,31 @@ def is_enabled(value, default):
     else:
         return default
 
+def _require_int(name, default=None):
+    """Read an env var as int; crash with a clear message if missing/invalid."""
+    val = environ.get(name, '')
+    if not val:
+        if default is not None:
+            return default
+        raise EnvironmentError(f"Required env var '{name}' is not set. Add it to your environment variables.")
+    try:
+        return int(val)
+    except ValueError:
+        raise EnvironmentError(f"Env var '{name}' must be an integer, got: '{val}'")
+
+def _require_str(name):
+    """Read a required string env var; crash with a clear message if missing."""
+    val = environ.get(name, '')
+    if not val:
+        raise EnvironmentError(f"Required env var '{name}' is not set. Add it to your environment variables.")
+    return val
+
 # Bot information
 SESSION = environ.get('SESSION', 'ZiZuBot_Session')
-API_ID = int(environ.get('API_ID', ''))
-API_HASH = environ.get('API_HASH', '')
-BOT_TOKEN = environ.get('BOT_TOKEN', '')
+# FIX: give clear error messages when required env vars are missing
+API_ID = _require_int('API_ID')
+API_HASH = _require_str('API_HASH')
+BOT_TOKEN = _require_str('BOT_TOKEN')
 
 # Bot settings
 CACHE_TIME = int(environ.get('CACHE_TIME', 300))
@@ -35,12 +55,12 @@ AUTH_CHANNEL = environ.get('AUTH_CHANNEL')
 AUTH_GROUPS = [int(ch) for ch in auth_grp.split()] if auth_grp else None
 
 # MongoDB information
-DATABASE_URI = environ.get('DATABASE_URI', "")
+DATABASE_URI = _require_str('DATABASE_URI')
 DATABASE_NAME = environ.get('DATABASE_NAME', "ZiZuBot")
 COLLECTION_NAME = environ.get('COLLECTION_NAME', 'Telegram_files')
 
 # Others
-LOG_CHANNEL = int(environ.get('LOG_CHANNEL', ''))
+LOG_CHANNEL = _require_int('LOG_CHANNEL')
 SUPPORT_CHAT = environ.get('SUPPORT_CHAT', 'ZiZuBot_support')
 P_TTI_SHOW_OFF = is_enabled((environ.get('P_TTI_SHOW_OFF', 'True')), False)
 IMDB = is_enabled((environ.get('IMDB', 'False')), True)
@@ -51,7 +71,7 @@ IMDB_TEMPLATE = environ.get("IMDB_TEMPLATE", "🏷 𝖳𝗂𝗍𝗅𝖾: <a href
 LONG_IMDB_DESCRIPTION = is_enabled(environ.get("LONG_IMDB_DESCRIPTION", "False"), False)
 SPELL_CHECK_REPLY = is_enabled(environ.get("SPELL_CHECK_REPLY", "True"), True)
 MAX_LIST_ELM = environ.get("MAX_LIST_ELM", None)
-INDEX_REQ_CHANNEL = int(environ.get('INDEX_REQ_CHANNEL', LOG_CHANNEL))
+INDEX_REQ_CHANNEL = _require_int('INDEX_REQ_CHANNEL', default=LOG_CHANNEL)
 FILE_STORE_CHANNEL = [int(ch) for ch in (environ.get('FILE_STORE_CHANNEL', '')).split()]
 MELCOW_NEW_USERS = is_enabled((environ.get('MELCOW_NEW_USERS', "True")), True)
 PROTECT_CONTENT = is_enabled((environ.get('PROTECT_CONTENT', "False")), False)
