@@ -6,7 +6,11 @@ from database.users_chats_db import db
 from database.ia_filterdb import Media
 from utils import get_size, temp, get_settings
 from Script import script
-from pyrogram.errors import ChatAdminRequired
+from pyrogram.errors import ChatAdminRequired, FloodWait
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 """-----------------------------------------https://t.me/GetTGLink/4179 --------------------------------------"""
 
@@ -113,8 +117,12 @@ async def leave_a_chat(bot, message):
 
         await bot.leave_chat(chat)
         await message.reply(f"left the chat `{chat}`")
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value)
+        await message.reply("Done (had to wait for rate limit).")
     except Exception as e:
-        await message.reply(f'Error - {e}')
+        logger.exception(e)
+        await message.reply('Failed to leave that chat. Check the chat ID and try again.')
 
 @Client.on_message(filters.command('disable') & filters.user(ADMINS))
 async def disable_chat(bot, message):
@@ -149,8 +157,10 @@ async def disable_chat(bot, message):
             text=f'<b>Hello Friends, \nMy admin has told me to leave from group so i go! If you wanna add me again contact my support group.</b> \nReason : <code>{reason}</code>',
             reply_markup=reply_markup)
         await bot.leave_chat(chat_)
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value)
     except Exception as e:
-        await message.reply(f"Error - {e}")
+        logger.exception(e)
 
 
 @Client.on_message(filters.command('enable') & filters.user(ADMINS))
@@ -226,8 +236,12 @@ async def ban_a_user(bot, message):
         return await message.reply("This is an invalid user, make sure ia have met him before.")
     except IndexError:
         return await message.reply("This might be a channel, make sure its a user.")
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value)
+        return await message.reply("Rate limited by Telegram. Please try again in a moment.")
     except Exception as e:
-        return await message.reply(f'Error - {e}')
+        logger.exception(e)
+        return await message.reply('Failed to fetch user. Make sure the user ID or username is correct.')
     else:
         jar = await db.get_ban_status(k.id)
         if jar['is_banned']:
@@ -258,9 +272,13 @@ async def unban_a_user(bot, message):
     except PeerIdInvalid:
         return await message.reply("This is an invalid user, make sure ia have met him before.")
     except IndexError:
-        return await message.reply("Thismight be a channel, make sure its a user.")
+        return await message.reply("This might be a channel, make sure its a user.")
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value)
+        return await message.reply("Rate limited by Telegram. Please try again in a moment.")
     except Exception as e:
-        return await message.reply(f'Error - {e}')
+        logger.exception(e)
+        return await message.reply('Failed to fetch user. Make sure the user ID or username is correct.')
     else:
         jar = await db.get_ban_status(k.id)
         if not jar['is_banned']:

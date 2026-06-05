@@ -71,9 +71,12 @@ async def send_for_index(bot, message):
         return await message.reply('This may be a private channel / group. Make me an admin over there to index the files.')
     except (UsernameInvalid, UsernameNotModified):
         return await message.reply('Invalid Link specified.')
+    except FloodWait as fw:
+        logger.warning(f"FloodWait {fw.value}s on get_chat during index request")
+        await asyncio.sleep(fw.value)
     except Exception as e:
         logger.exception(e)
-        return await message.reply(f'Errors - {e}')
+        return await message.reply('Something went wrong fetching that chat. Make sure the bot is a member/admin there.')
     try:
         k = await bot.get_messages(chat_id, last_msg_id)
     except:
@@ -134,6 +137,17 @@ async def set_skip_number(bot, message):
         await message.reply("Give me a skip number")
 
 
+def _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors):
+    return (
+        f"✅ Saved: <code>{total_files}</code>\n"
+        f"♻️ Duplicates skipped: <code>{duplicate}</code>\n"
+        f"🗑 Deleted messages skipped: <code>{deleted}</code>\n"
+        f"🚫 Non-media skipped: <code>{no_media + unsupported}</code> "
+        f"(Unsupported: <code>{unsupported}</code>)\n"
+        f"⚠️ Errors: <code>{errors}</code>"
+    )
+
+
 async def index_files_to_db(lst_msg_id, chat, msg, bot):
     total_files = 0
     duplicate = 0
@@ -147,15 +161,25 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
             temp.CANCEL = False
             async for message in bot.iter_messages(chat, lst_msg_id, temp.CURRENT):
                 if temp.CANCEL:
-                    await msg.edit(f"Successfully Cancelled!!\n\nSaved <code>{total_files}</code> files to dataBase!\nDuplicate Files Skipped: <code>{duplicate}</code>\nDeleted Messages Skipped: <code>{deleted}</code>\nNon-Media messages skipped: <code>{no_media + unsupported}</code>(Unsupported Media - `{unsupported}` )\nErrors Occurred: <code>{errors}</code>")
+                    await msg.edit(
+                        "❌ <b>Indexing Cancelled</b>\n\n" + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+                    )
                     break
                 current += 1
                 if current % 20 == 0:
                     can = [[InlineKeyboardButton('Cancel', callback_data='index_cancel')]]
-                    reply = InlineKeyboardMarkup(can)
-                    await msg.edit_text(
-                        text=f"Total messages fetched: <code>{current}</code>\nTotal messages saved: <code>{total_files}</code>\nDuplicate Files Skipped: <code>{duplicate}</code>\nDeleted Messages Skipped: <code>{deleted}</code>\nNon-Media messages skipped: <code>{no_media + unsupported}</code>(Unsupported Media - `{unsupported}` )\nErrors Occurred: <code>{errors}</code>",
-                        reply_markup=reply)
+                    try:
+                        await msg.edit_text(
+                            text=(
+                                f"⏳ <b>Indexing…</b>  (<code>{current}</code> fetched)\n\n"
+                                + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+                            ),
+                            reply_markup=InlineKeyboardMarkup(can)
+                        )
+                    except FloodWait as fw:
+                        await asyncio.sleep(fw.value)
+                    except Exception:
+                        pass
                 if message.empty:
                     deleted += 1
                     continue
@@ -171,15 +195,39 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                     continue
                 media.file_type = message.media.value
                 media.caption = message.caption
-                aynav, vnay = await save_file(media)
+                try:
+                    aynav, vnay = await save_file(media)
+                except FloodWait as fw:
+                    logger.warning(f"FloodWait {fw.value}s while saving file — sleeping")
+                    await asyncio.sleep(fw.value)
+                    try:
+                        aynav, vnay = await save_file(media)
+                    except Exception:
+                        errors += 1
+                        continue
                 if aynav:
                     total_files += 1
                 elif vnay == 0:
                     duplicate += 1
                 elif vnay == 2:
                     errors += 1
+        except FloodWait as fw:
+            logger.warning(f"FloodWait {fw.value}s during iter_messages — indexing paused then resumed")
+            await asyncio.sleep(fw.value)
+            # Resume is not possible mid-iterator; report partial progress
+            await msg.edit(
+                f"⚠️ <b>Hit Telegram rate limit mid-index.</b> Partial progress saved.\n\n"
+                + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+                + f"\n\n<i>Re-run /index from message ID <code>{current}</code> to continue.</i>"
+            )
         except Exception as e:
             logger.exception(e)
-            await msg.edit(f'Error: {e}')
+            await msg.edit(
+                f"❌ <b>Indexing stopped due to an error.</b>\n\n"
+                + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+            )
         else:
-            await msg.edit(f'Succesfully saved <code>{total_files}</code> to dataBase!\nDuplicate Files Skipped: <code>{duplicate}</code>\nDeleted Messages Skipped: <code>{deleted}</code>\nNon-Media messages skipped: <code>{no_media + unsupported}</code>(Unsupported Media - `{unsupported}` )\nErrors Occurred: <code>{errors}</code>')
+            await msg.edit(
+                "✅ <b>Indexing Complete!</b>\n\n"
+                + _index_summary(total_files, duplicate, deleted, no_media, unsupported, errors)
+            )
