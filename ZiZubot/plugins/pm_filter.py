@@ -161,7 +161,7 @@ async def next_page(bot, query):
         await safe_answer(query, script.OLD_MES, show_alert=True)
         return
 
-    files, n_offset, total = await get_search_results(search, offset=offset, filter=True)
+    files, n_offset, total = await get_search_results(search, offset=offset)
     try:
         n_offset = int(n_offset)
     except:
@@ -242,7 +242,7 @@ async def advantage_spoll_choker(bot, query):
     await safe_answer(query, script.CHK_MOV_ALRT)
     k = await manual_filters(bot, query.message, text=movie)
     if k == False:
-        files, offset, total_results = await get_search_results(movie, offset=0, filter=True)
+        files, offset, total_results = await get_search_results(movie, offset=0)
         if files:
             k = (movie, files, offset, total_results)
             await auto_filter(bot, query, k)
@@ -305,7 +305,7 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
 
     req = query.from_user.id
     chat_id = query.message.chat.id
-    files, offset, total_results = await get_search_results(search, offset=0, filter=True)
+    files, offset, total_results = await get_search_results(search, offset=0)
     if not files:
         return await query.answer("🚫 No Files Found 🚫", show_alert=True)
 
@@ -373,7 +373,7 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
 
     req = query.from_user.id
     chat_id = query.message.chat.id
-    files, offset, total_results = await get_search_results(search, offset=0, filter=True)
+    files, offset, total_results = await get_search_results(search, offset=0)
     if not files:
         return await query.answer("🚫 No Files Found 🚫", show_alert=True)
 
@@ -965,7 +965,7 @@ async def auto_filter(client, msg, spoll=False):
         # ⚡ Fetch settings and search results in parallel
         settings, (files, offset, total_results) = await asyncio.gather(
             get_settings(message.chat.id),
-            get_search_results(search, offset=0, filter=True),
+            get_search_results(search, offset=0),
         )
 
         if not files:
