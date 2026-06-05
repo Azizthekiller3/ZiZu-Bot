@@ -1,3 +1,4 @@
+import logging
 import random
 import re, asyncio, time, shutil, psutil, os, sys
 from pyrogram import Client, filters, enums
@@ -8,6 +9,8 @@ from urllib.parse import quote_plus
 from database.ia_filterdb import Media
 from database.users_chats_db import db
 from database.filters_mdb import filter_stats
+
+logger = logging.getLogger(__name__)
 
 CMD = ["/", "."]
 
@@ -278,7 +281,7 @@ async def generate_link(client, message):
         )
 
     except Exception as e:
-        print(f"[generate_link] Error: {e}")
+        logger.exception(e)
         await message.reply_text(
             "<b>⚠️ Something went wrong!</b>\n\n"
             "<blockquote>Please try again or contact the admin.</blockquote>",
