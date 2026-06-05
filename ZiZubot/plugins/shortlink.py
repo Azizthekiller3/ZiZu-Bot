@@ -104,6 +104,9 @@ async def cmd_set_shortlink(client, message):
             parse_mode=enums.ParseMode.HTML
         )
     domain, api_key = args[0], args[1]
+    # Strip angle brackets in case user copied the example format: /shortlink <domain> <api_key>
+    domain = domain.strip("<>")
+    api_key = api_key.strip("<>")
     # Strip http/https prefix if user pasted full URL
     domain = domain.replace("https://", "").replace("http://", "").rstrip("/")
     await set_shortlink_config(domain, api_key)
