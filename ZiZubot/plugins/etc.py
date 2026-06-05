@@ -82,7 +82,7 @@ def get_status_emoji(percentage: float) -> str:
     return "🔴"
 
 
-@Client.on_message(filters.command("usage"))
+@Client.on_message(filters.command("usage") & filters.user(ADMINS))
 async def live_usage(bot, update):
     msg = await bot.send_message(
         chat_id=update.chat.id,
