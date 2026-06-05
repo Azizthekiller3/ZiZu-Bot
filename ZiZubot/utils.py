@@ -1,7 +1,7 @@
 import logging
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid
 from info import AUTH_CHANNEL, LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
-from imdb import Cinemagoer 
+from imdb import Cinemagoer
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton
 from pyrogram import enums
@@ -24,11 +24,11 @@ BTN_URL_REGEX = re.compile(
 imdb = Cinemagoer()
 
 BANNED = {}
-SMART_OPEN = '“'
-SMART_CLOSE = '”'
-START_CHAR = ('\'', '"', SMART_OPEN)
+SMART_OPEN = '\u201c'
+SMART_CLOSE = '\u201d'
+START_CHAR = ('\'\'', '"', SMART_OPEN)
 
-# temp db for banned 
+# temp db for banned
 class temp(object):
     BANNED_USERS = []
     BANNED_CHATS = []
@@ -42,7 +42,7 @@ class temp(object):
 
 async def is_subscribed(bot, query):
     try:
-        await bot.get_chat(int(AUTH_CHANNEL))  # resolve peer first
+        await bot.get_chat(int(AUTH_CHANNEL))
         user = await bot.get_chat_member(int(AUTH_CHANNEL), query.from_user.id)
     except UserNotParticipant:
         return False
@@ -56,7 +56,6 @@ async def is_subscribed(bot, query):
 
 async def get_poster(query, bulk=False, id=False, file=None):
     if not id:
-        # https://t.me/GetTGLink/4183
         query = (query.strip()).lower()
         title = query
         year = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
@@ -66,19 +65,22 @@ async def get_poster(query, bulk=False, id=False, file=None):
         elif file is not None:
             year = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
             if year:
-                year = list_to_str(year[:1]) 
+                year = list_to_str(year[:1])
         else:
             year = None
-        movieid = imdb.search_movie(title.lower(), results=10)
+        # FIX: imdb.search_movie() is a blocking synchronous call — running it
+        # directly on the asyncio event loop would freeze the entire bot for
+        # several seconds.  Offload to a thread pool with asyncio.to_thread().
+        movieid = await asyncio.to_thread(imdb.search_movie, title.lower(), 10)
         if not movieid:
             return None
         if year:
-            filtered=list(filter(lambda k: str(k.get('year')) == str(year), movieid))
+            filtered = list(filter(lambda k: str(k.get('year')) == str(year), movieid))
             if not filtered:
                 filtered = movieid
         else:
             filtered = movieid
-        movieid=list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
+        movieid = list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
         if not movieid:
             movieid = filtered
         if bulk:
@@ -86,7 +88,8 @@ async def get_poster(query, bulk=False, id=False, file=None):
         movieid = movieid[0].movieID
     else:
         movieid = query
-    movie = imdb.get_movie(movieid)
+    # FIX: imdb.get_movie() is also a blocking synchronous call — same fix.
+    movie = await asyncio.to_thread(imdb.get_movie, movieid)
     if movie.get("original air date"):
         date = movie["original air date"]
     elif movie.get("year"):
@@ -118,10 +121,10 @@ async def get_poster(query, bulk=False, id=False, file=None):
         "certificates": list_to_str(movie.get("certificates")),
         "languages": list_to_str(movie.get("languages")),
         "director": list_to_str(movie.get("director")),
-        "writer":list_to_str(movie.get("writer")),
-        "producer":list_to_str(movie.get("producer")),
-        "composer":list_to_str(movie.get("composer")) ,
-        "cinematographer":list_to_str(movie.get("cinematographer")),
+        "writer": list_to_str(movie.get("writer")),
+        "producer": list_to_str(movie.get("producer")),
+        "composer": list_to_str(movie.get("composer")),
+        "cinematographer": list_to_str(movie.get("cinematographer")),
         "music_team": list_to_str(movie.get("music department")),
         "distributors": list_to_str(movie.get("distributors")),
         'release_date': date,
@@ -130,12 +133,11 @@ async def get_poster(query, bulk=False, id=False, file=None):
         'poster': movie.get('full-size cover url'),
         'plot': plot,
         'rating': str(movie.get("rating")),
-        'url':f'https://www.imdb.com/title/tt{movieid}'
+        'url': f'https://www.imdb.com/title/tt{movieid}'
     }
-# https://github.com/odysseusmax/animated-lamp/blob/2ef4730eb2b5f0596ed6d03e7b05243d93e3415b/bot/utils/broadcast.py#L37
+
 
 async def broadcast_messages(user_id, message):
-    # Use a loop instead of recursion to avoid stack overflow on repeated FloodWait
     max_retries = 5
     for attempt in range(max_retries):
         try:
@@ -183,16 +185,15 @@ async def get_settings(group_id):
         settings = await db.get_settings(group_id)
         temp.SETTINGS[group_id] = settings
     return settings
-    
+
 async def save_group_settings(group_id, key, value):
     current = await get_settings(group_id)
     current[key] = value
     temp.SETTINGS[group_id] = current
     await db.update_settings(group_id, current)
-    
+
 def get_size(size):
     """Get size in readable format"""
-
     units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
     size = float(size)
     i = 0
@@ -203,7 +204,7 @@ def get_size(size):
 
 def split_list(l, n):
     for i in range(0, len(l), n):
-        yield l[i:i + n]  
+        yield l[i:i + n]
 
 def get_file_id(msg: Message):
     if msg.media:
@@ -224,7 +225,6 @@ def get_file_id(msg: Message):
 
 def extract_user(message: Message) -> Union[int, str]:
     """extracts the user from a message"""
-    # https://github.com/SpEcHiDe/PyroGramBot/blob/f30e2cca12002121bad1982f68cd0ff9814ce027/pyrobot/helper_functions/extract_user.py#L7
     user_id = None
     user_first_name = None
     if message.reply_to_message and message.reply_to_message.from_user:
@@ -236,13 +236,11 @@ def extract_user(message: Message) -> Union[int, str]:
             len(message.entities) > 1 and
             message.entities[1].type == enums.MessageEntityType.TEXT_MENTION
         ):
-           
             required_entity = message.entities[1]
             user_id = required_entity.user.id
             user_first_name = required_entity.user.first_name
         else:
             user_id = message.command[1]
-            # don't want to make a request -_-
             user_first_name = user_id
         try:
             user_id = int(user_id)
@@ -256,18 +254,16 @@ def extract_user(message: Message) -> Union[int, str]:
 def list_to_str(k):
     if not k:
         return "N/A"
-    elif len(k) == 1:
-        return str(k[0])
-    elif MAX_LIST_ELM:
-        k = k[:int(MAX_LIST_ELM)]
-        return ' '.join(f'{elem}, ' for elem in k)
-    else:
-        return ' '.join(f'{elem}, ' for elem in k)
+    # FIX: old code used ' '.join(f'{elem}, ' for elem in k) which always added
+    # a trailing comma+space after the last element, e.g. "Action, Drama, ".
+    # Use ', '.join() so the separator only appears between elements.
+    items = [str(elem) for elem in (k[:int(MAX_LIST_ELM)] if MAX_LIST_ELM else k)]
+    return ', '.join(items)
 
 def last_online(from_user):
     time = ""
     if from_user.is_bot:
-        time += "🤖 Bot :("
+        time += "\U0001f916 Bot :("
     elif from_user.status == enums.UserStatus.RECENTLY:
         time += "Recently"
     elif from_user.status == enums.UserStatus.LAST_WEEK:
@@ -286,7 +282,7 @@ def last_online(from_user):
 def split_quotes(text: str) -> List:
     if not any(text.startswith(char) for char in START_CHAR):
         return text.split(None, 1)
-    counter = 1  # ignore first char -> is some kind of quote
+    counter = 1
     while counter < len(text):
         if text[counter] == "\\":
             counter += 1
@@ -296,9 +292,7 @@ def split_quotes(text: str) -> List:
     else:
         return text.split(None, 1)
 
-    # 1 to avoid starting quote, and counter is exclusive so avoids ending
     key = remove_escapes(text[1:counter].strip())
-    # index will be in range, or `else` would have been executed and returned
     rest = text[counter + 1:].strip()
     if not key:
         key = text[0] + text[0]
@@ -313,19 +307,16 @@ def parser(text, keyword):
     i = 0
     alerts = []
     for match in BTN_URL_REGEX.finditer(text):
-        # Check if btnurl is escaped
         n_escapes = 0
         to_check = match.start(1) - 1
         while to_check > 0 and text[to_check] == "\\":
             n_escapes += 1
             to_check -= 1
 
-        # if even, not escaped -> create button
         if n_escapes % 2 == 0:
             note_data += text[prev:match.start(1)]
             prev = match.end(1)
             if match.group(3) == "buttonalert":
-                # create a thruple with button label, url, and newline status
                 if bool(match.group(5)) and buttons:
                     buttons[-1].append(InlineKeyboardButton(
                         text=match.group(2),
