@@ -4,8 +4,9 @@ from database.ia_filterdb import save_file
 
 media_filter = filters.document | filters.video | filters.audio
 
+_channel_filter = filters.chat(CHANNELS) if CHANNELS else filters.chat([])
 
-@Client.on_message(filters.chat(CHANNELS) & media_filter)
+@Client.on_message(_channel_filter & media_filter)
 async def media(bot, message):
     """Media Handler"""
     for file_type in ("document", "video", "audio"):

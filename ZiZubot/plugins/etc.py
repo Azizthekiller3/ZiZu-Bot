@@ -110,7 +110,7 @@ async def live_usage(bot, update):
         remaining = max(0, 60 - elapsed)
 
         text = (
-            f"<b>⚙️ 𝖱𝖾𝖺𝗅-𝖳𝗂𝗆𝖾 𝖡𝗈𝗍 𝖲𝗍𝖺𝗍𝗎𝗌</b>  <i>(Koyeb)</i>\n"
+            f"<b>⚙️ 𝖱𝖾𝖺𝗅-𝖳𝗂𝗆𝖾 𝖡𝗈𝗍 𝖲𝗍𝖺𝗍𝗎𝗌</b>  <i>(Replit)</i>\n"
             f"{'━' * 28}\n\n"
 
             f"🕔 <b>Uptime</b>   » <code>{currentTime}</code>\n\n"

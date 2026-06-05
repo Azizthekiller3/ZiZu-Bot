@@ -221,7 +221,7 @@ def extract_user(message: Message) -> Union[int, str]:
     # https://github.com/SpEcHiDe/PyroGramBot/blob/f30e2cca12002121bad1982f68cd0ff9814ce027/pyrobot/helper_functions/extract_user.py#L7
     user_id = None
     user_first_name = None
-    if message.reply_to_message:
+    if message.reply_to_message and message.reply_to_message.from_user:
         user_id = message.reply_to_message.from_user.id
         user_first_name = message.reply_to_message.from_user.first_name
 

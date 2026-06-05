@@ -129,7 +129,7 @@ def _build_file_btn(files, settings, pre, key, offset, total_results, req):
 #  MESSAGE HANDLER
 # ══════════════════════════════════════════════════════════════════════════════
 
-@Client.on_message((filters.group | filters.private) & filters.text & filters.incoming)
+@Client.on_message((filters.group | filters.private) & filters.text & filters.incoming & ~filters.command(["start","help","filter","filters","del","delall","connect","disconnect","connections","settings","set_template","id","info","imdb","search","ping","stats","broadcast","index","setskip","logs","delete","deleteall","channel","ban","unban","leave","disable","enable","users","chats","restart","usage","link"]))
 async def give_filter(client, message):
     k = await manual_filters(client, message)
     if k == False:
@@ -179,7 +179,7 @@ async def next_page(bot, query):
         btn = [
             [
                 InlineKeyboardButton(text=f"{file.file_name}",          callback_data=f'files#{file.file_id}'),
-                InlineKeyboardButton(text=f"{get_size(file.file_size)}", callback_data=f'files_#{file.file_id}'),
+                InlineKeyboardButton(text=f"{get_size(file.file_size)}", callback_data=f'files#{file.file_id}'),
             ]
             for file in files
         ]

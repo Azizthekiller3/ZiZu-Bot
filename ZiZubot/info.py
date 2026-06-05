@@ -20,7 +20,7 @@ BOT_TOKEN = environ.get('BOT_TOKEN', '')
 
 # Bot settings
 CACHE_TIME = int(environ.get('CACHE_TIME', 300))
-USE_CAPTION_FILTER = bool(environ.get('USE_CAPTION_FILTER', False))
+USE_CAPTION_FILTER = is_enabled(environ.get('USE_CAPTION_FILTER', 'False'), False)
 _default_pic = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'zizubot_logo.jpg')
 PICS = environ.get('PICS', _default_pic).split()
 
