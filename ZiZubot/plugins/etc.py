@@ -5,6 +5,9 @@ from pyrogram.types import *
 from info import ADMINS
 from utils import humanbytes
 from urllib.parse import quote_plus
+from database.ia_filterdb import Media
+from database.users_chats_db import db
+from database.filters_mdb import filter_stats
 
 CMD = ["/", "."]
 
@@ -148,6 +151,54 @@ async def live_usage(bot, update):
             break
 
         await asyncio.sleep(5)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#            📊  BOT STATISTICS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@Client.on_message(filters.command("stats") & filters.user(ADMINS))
+async def bot_stats(bot, message):
+    msg = await message.reply_text(
+        "<b>⚙️ Fetching stats...</b>",
+        parse_mode=enums.ParseMode.HTML
+    )
+    try:
+        results = await asyncio.gather(
+            db.total_users_count(),
+            db.total_chat_count(),
+            Media.collection.count_documents({}),
+            db.get_db_size(),
+            filter_stats(),
+        )
+        users_count               = results[0]
+        chats_count               = results[1]
+        files_count               = results[2]
+        db_size_bytes             = results[3]
+        groups_with_filters, filter_count = results[4]
+    except Exception as e:
+        await msg.edit_text(f"<b>⚠️ Failed to fetch stats:</b> <code>{e}</code>",
+                            parse_mode=enums.ParseMode.HTML)
+        return
+
+    uptime_seconds = int(time.time() - BOT_START_TIME)
+    uptime_str     = format_uptime_short(uptime_seconds)
+    db_size_str    = humanbytes(db_size_bytes)
+
+    text = (
+        f"<b>📊 𝖡𝗈𝗍 𝖲𝗍𝖺𝗍𝗂𝗌𝗍𝗂𝖼𝗌</b>\n"
+        f"{'━' * 28}\n\n"
+        f"📁 <b>Indexed Files</b>  »  <code>{files_count:,}</code>\n"
+        f"👥 <b>Users</b>          »  <code>{users_count:,}</code>\n"
+        f"🏘 <b>Groups</b>         »  <code>{chats_count:,}</code>\n"
+        f"🗂 <b>Filters</b>        »  <code>{filter_count:,}</code>  "
+        f"<i>(across {groups_with_filters} group(s))</i>\n\n"
+        f"{'━' * 28}\n"
+        f"💾 <b>DB Size</b>        »  <code>{db_size_str}</code>\n"
+        f"⏱ <b>Uptime</b>         »  <code>{uptime_str}</code>\n"
+        f"{'━' * 28}"
+    )
+    await msg.edit_text(text, parse_mode=enums.ParseMode.HTML)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
