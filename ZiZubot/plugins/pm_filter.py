@@ -22,6 +22,8 @@ from database.filters_mdb import (
     find_filter,
     get_filters,
 )
+from database.shortlink_db import needs_verify
+from plugins.shortlink import make_verify_link
 import logging
 
 logger = logging.getLogger(__name__)
@@ -129,7 +131,7 @@ def _build_file_btn(files, settings, pre, key, offset, total_results, req):
 #  MESSAGE HANDLER
 # ══════════════════════════════════════════════════════════════════════════════
 
-@Client.on_message((filters.group | filters.private) & filters.text & filters.incoming & ~filters.command(["start","help","filter","filters","del","delall","connect","disconnect","connections","settings","set_template","id","info","imdb","search","ping","stats","broadcast","index","setskip","logs","delete","deleteall","channel","ban","unban","leave","disable","enable","users","chats","restart","usage","link"]))
+@Client.on_message((filters.group | filters.private) & filters.text & filters.incoming & ~filters.command(["start","help","filter","filters","del","delall","connect","disconnect","connections","settings","set_template","id","info","imdb","search","ping","stats","broadcast","index","setskip","logs","delete","deleteall","channel","ban","unban","leave","disable","enable","users","chats","restart","usage","link","shortlink","shortlink_status","set_daily_verify","remove_shortlink"]))
 async def give_filter(client, message):
     k = await manual_filters(client, message)
     if k == False:
@@ -596,6 +598,29 @@ async def cb_handler(client: Client, query: CallbackQuery):
             elif settings['botpm']:
                 await safe_answer(query, url=f"https://t.me/{temp.U_NAME}?start={ident}_{file_id}")
                 return
+
+            # ── Shortlink verification gate ────────────────────────────────
+            if await needs_verify(query.from_user.id):
+                short = await make_verify_link(temp.U_NAME, ident, file_id, query.from_user.id)
+                if short:
+                    btn = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔗 Get File", url=short)
+                    ]])
+                    await safe_answer(query)
+                    await client.send_message(
+                        chat_id=query.from_user.id,
+                        text=(
+                            "🔐 <b>Verification Required</b>\n\n"
+                            "Click the button below, complete the short ad, "
+                            "then return here to receive your file.\n\n"
+                            "<i>This helps keep the bot free for everyone.</i>"
+                        ),
+                        reply_markup=btn,
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                    return
+            # ──────────────────────────────────────────────────────────────
+
             else:
                 await client.send_cached_media(
                     chat_id=query.from_user.id,

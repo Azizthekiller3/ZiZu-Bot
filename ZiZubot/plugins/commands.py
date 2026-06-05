@@ -11,6 +11,7 @@ from database.users_chats_db import db
 from info import CHANNELS, ADMINS, AUTH_CHANNEL, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT
 from utils import get_settings, get_size, is_subscribed, save_group_settings, temp
 from database.connections_mdb import active_connection
+from plugins.shortlink import consume_token
 import re
 import json
 import base64
@@ -115,11 +116,46 @@ async def start(client, message):
         return
         
         # etc.py link feature !!!>>> import pmfilter autofilter fn()
+    # ── Shortlink verification return ──────────────────────────────────────────
+    if len(message.command) == 2 and message.command[1].startswith("verify_"):
+        token = message.command[1][len("verify_"):]
+        ident, file_id = await consume_token(token, message.from_user.id)
+        if not file_id:
+            await message.reply_text("⚠️ This verification link has expired or already been used. Please request the file again.")
+            return
+        files_ = await get_file_details(file_id)
+        if not files_:
+            await message.reply_text("⚠️ File not found. Please request it again.")
+            return
+        files = files_[0]
+        title  = files.file_name
+        size   = get_size(files.file_size)
+        f_caption = files.caption
+        if CUSTOM_FILE_CAPTION:
+            try:
+                f_caption = CUSTOM_FILE_CAPTION.format(
+                    file_name='' if title is None else title,
+                    file_size='' if size is None else size,
+                    file_caption='' if f_caption is None else f_caption
+                )
+            except Exception:
+                pass
+        if f_caption is None:
+            f_caption = f"{title}"
+        await client.send_cached_media(
+            chat_id=message.from_user.id,
+            file_id=file_id,
+            caption=f_caption,
+            protect_content=True if ident == "filep" else False
+        )
+        return
+    # ──────────────────────────────────────────────────────────────────────────
+
     if len(message.command) == 2 and message.command[1].startswith('getfile'):
-        searches = message.command[1].split("-", 1)[1] 
-        search = searches.replace('-',' ')
-        message.text = search 
-        await auto_filter(client, message) 
+        searches = message.command[1].split("-", 1)[1]
+        search = searches.replace('-', ' ')
+        message.text = search
+        await auto_filter(client, message)
         return
 
     if len(message.command) == 2 and message.command[1] in ["subscribe", "error", "okay", "help"]:
