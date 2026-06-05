@@ -14,8 +14,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # ── Search Result Cache ────────────────────────────────────────────────────────
-# Stores: { cache_key: (files, next_offset, total_results, timestamp) }
-# TTL: 60 seconds — same query within 60s returns instantly from memory
 _SEARCH_CACHE = {}
 _CACHE_TTL = 60  # seconds
 
@@ -30,7 +28,6 @@ def _cache_get(key):
 
 def _cache_set(key, files, next_offset, total_results):
     _SEARCH_CACHE[key] = (files, next_offset, total_results, time.time())
-    # Cleanup old entries if cache grows too large
     if len(_SEARCH_CACHE) > 200:
         cutoff = time.time() - _CACHE_TTL
         expired = [k for k, v in _SEARCH_CACHE.items() if v[3] < cutoff]
@@ -88,17 +85,18 @@ async def save_file(media):
             return True, 1
 
 
-async def get_search_results(query, file_type=None, max_results=10, offset=0, filter=False):
+# FIX: renamed parameter `filter` → `db_filter` to stop shadowing Python's builtin filter().
+# The old name didn't cause a runtime error here but prevented any code in this
+# function from using the builtin filter() and caused linter/IDE confusion.
+async def get_search_results(query, file_type=None, max_results=10, offset=0, db_filter=False):
     """For given query return (results, next_offset, total_results)"""
     query = query.strip()
 
-    # ── Cache lookup ──────────────────────────────────────────────────────────
     ck = _cache_key(query, file_type, offset)
     cached = _cache_get(ck)
     if cached:
         logger.info(f"Cache hit for query: '{query}'")
         return cached
-    # ─────────────────────────────────────────────────────────────────────────
 
     if not query:
         raw_pattern = '.'
@@ -113,54 +111,45 @@ async def get_search_results(query, file_type=None, max_results=10, offset=0, fi
         return [], '', 0
 
     if USE_CAPTION_FILTER:
-        filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
+        db_filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
     else:
-        filter = {'file_name': regex}
+        db_filter = {'file_name': regex}
 
     if file_type:
-        filter['file_type'] = file_type
+        db_filter['file_type'] = file_type
 
-    # ── Run count and fetch in parallel for speed ─────────────────────────────
     import asyncio as _asyncio
-    total_task = _asyncio.ensure_future(Media.count_documents(filter))
+    total_task = _asyncio.ensure_future(Media.count_documents(db_filter))
 
-    cursor = Media.find(filter)
+    cursor = Media.find(db_filter)
     cursor.sort('$natural', -1)
     cursor.skip(offset).limit(max_results)
     files_task = _asyncio.ensure_future(cursor.to_list(length=max_results))
 
     total_results, files = await _asyncio.gather(total_task, files_task)
-    # ─────────────────────────────────────────────────────────────────────────
 
     next_offset = offset + max_results
     if next_offset > total_results:
         next_offset = ''
 
-    # ── Store in cache ────────────────────────────────────────────────────────
     _cache_set(ck, files, next_offset, total_results)
-    # ─────────────────────────────────────────────────────────────────────────
 
     return files, next_offset, total_results
 
 
 async def get_file_details(query):
-    filter = {'file_id': query}
-    cursor = Media.find(filter)
+    db_filter = {'file_id': query}
+    cursor = Media.find(db_filter)
     filedetails = await cursor.to_list(length=1)
     return filedetails
 
 
 async def get_movie_list(max_results=30):
-    """
-    Returns a list of recent movie file names.
-    Movies are identified by NOT having episode/season patterns like S01E01.
-    Cached for 5 minutes to avoid heavy repeated DB fetches.
-    """
-    # ✅ FIX: Cache result for 5 minutes (300s) — fetches 150 docs every call otherwise
+    """Returns a list of recent movie file names. Cached for 60s."""
     ck = f"_movie_list_{max_results}"
     cached = _cache_get(ck)
     if cached:
-        return cached[0]  # cached[0] is the files list we repurpose for movies
+        return cached[0]
 
     try:
         series_pattern = re.compile(
@@ -185,7 +174,6 @@ async def get_movie_list(max_results=30):
             if len(movies) >= max_results:
                 break
 
-        # Store in cache (reuse cache infra with TTL=300s)
         _SEARCH_CACHE[ck] = (movies, '', 0, time.time())
         return movies
     except Exception as e:
@@ -194,11 +182,7 @@ async def get_movie_list(max_results=30):
 
 
 async def get_series_grouped(max_results=50):
-    """
-    Returns a dict of { series_title: [episode_numbers] } for recent series.
-    Cached for 5 minutes to avoid heavy repeated DB fetches (fetches 500 docs otherwise).
-    """
-    # ✅ FIX: Cache result for 5 minutes — fetches 500 docs every call otherwise
+    """Returns a dict of { series_title: [episode_numbers] }. Cached for 60s."""
     ck = f"_series_grouped_{max_results}"
     cached = _cache_get(ck)
     if cached:
