@@ -1,7 +1,6 @@
-import logging,sys,os,asyncio
+import logging, sys, os, asyncio
 import logging.config
 
-# Get logging configurations
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
@@ -23,25 +22,36 @@ from os import environ
 from aiohttp import web as webserver
 import aiohttp
 
+
+async def _auto_delete_msg(msg, delay: int = 5):
+    """Delete a message after `delay` seconds, silently ignoring errors."""
+    await asyncio.sleep(delay)
+    try:
+        await msg.delete()
+    except Exception:
+        pass
+
+
 async def schedule_restart():
     await asyncio.sleep(86400)  # 24 hours
     os.execv(sys.executable, ['python'] + sys.argv)
 
+
 async def keep_alive_loop(port: int):
     """Ping our own health endpoint every 4 minutes to prevent Koyeb from sleeping."""
-    # Use PUBLIC_URL env var if set, otherwise fall back to localhost
     public_url = environ.get('PUBLIC_URL', '').rstrip('/')
     local_url = f"http://localhost:{port}/"
     ping_url = (public_url + '/') if public_url else local_url
-    await asyncio.sleep(60)  # wait 1 min before first ping
+    await asyncio.sleep(60)
     async with aiohttp.ClientSession() as session:
         while True:
             try:
                 async with session.get(ping_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    logging.info(f"Keep-alive ping → {ping_url} [{resp.status}]")
+                    logging.info(f"Keep-alive ping -> {ping_url} [{resp.status}]")
             except Exception as e:
                 logging.warning(f"Keep-alive ping failed: {e}")
-            await asyncio.sleep(240)  # ping every 4 minutes
+            await asyncio.sleep(240)
+
 
 class Bot(Client):
 
@@ -67,22 +77,41 @@ class Bot(Client):
         temp.U_NAME = me.username
         temp.B_NAME = me.first_name
         self.username = '@' + me.username
-        logging.info(f"{me.first_name} with for Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
+        logging.info(f"{me.first_name} with Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
         logging.info(LOG_STR)
+
+        # Send restart notification and auto-delete it after 5 seconds
         try:
-            await self.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT)
+            restart_msg = await self.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT)
+            asyncio.create_task(_auto_delete_msg(restart_msg, delay=5))
         except Exception as e:
             logging.warning(f"Could not send restart message to LOG_CHANNEL ({LOG_CHANNEL}): {e}")
-        print("ZiZuBot™ is running!")
 
-        client = webserver.AppRunner(await bot_run())
-        await client.setup()
-        bind_address = "0.0.0.0"
+        logging.info("ZiZuBot is running!")
+
+        # Start the health-check web server.
+        # FIX: wrapped in retry loop — if the port is still bound by the dying
+        # previous process (OSError: Address already in use), we wait and retry
+        # instead of crashing and triggering another restart loop.
         port = int(environ.get("PORT", 8000))
-        await webserver.TCPSite(client, bind_address, port).start()
-        logging.info(f"Web health-check running on port {port}")
+        runner = webserver.AppRunner(await bot_run())
+        await runner.setup()
+        for attempt in range(1, 6):
+            try:
+                site = webserver.TCPSite(runner, "0.0.0.0", port)
+                await site.start()
+                logging.info(f"Web health-check running on port {port}")
+                break
+            except OSError as e:
+                if attempt < 5:
+                    logging.warning(f"Port {port} busy (attempt {attempt}/5), retrying in 3s: {e}")
+                    await asyncio.sleep(3)
+                else:
+                    logging.error(f"Could not bind to port {port} after 5 attempts: {e}")
+                    # Continue running — the bot itself works even without the health endpoint
+
         asyncio.create_task(schedule_restart())
-        asyncio.create_task(keep_alive_loop(port))  # keep Koyeb awake
+        asyncio.create_task(keep_alive_loop(port))
 
     async def stop(self, *args):
         await super().stop()
