@@ -49,17 +49,17 @@ async def index_files(bot, query):
     await index_files_to_db(int(lst_msg_id), chat, msg, bot)
 
 
-@Client.on_message((filters.forwarded | (filters.regex("(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")) & filters.text ) & filters.private & filters.incoming)
+@Client.on_message((filters.forwarded | (filters.regex(r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$") & filters.text)) & filters.private & filters.incoming)
 async def send_for_index(bot, message):
     if message.text:
-        regex = re.compile("(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
+        regex = re.compile(r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
         match = regex.match(message.text)
         if not match:
             return await message.reply('Invalid link')
         chat_id = match.group(4)
         last_msg_id = int(match.group(5))
         if chat_id.isnumeric():
-            chat_id  = int(("-100" + chat_id))
+            chat_id = int(("-100" + chat_id))
     elif message.forward_from_chat and message.forward_from_chat.type == enums.ChatType.CHANNEL:
         last_msg_id = message.forward_from_message_id
         chat_id = message.forward_from_chat.username or message.forward_from_chat.id
@@ -72,8 +72,15 @@ async def send_for_index(bot, message):
     except (UsernameInvalid, UsernameNotModified):
         return await message.reply('Invalid Link specified.')
     except FloodWait as fw:
-        logger.warning(f"FloodWait {fw.value}s on get_chat during index request")
-        await asyncio.sleep(fw.value)
+        # FIX: previously the code slept for fw.value seconds and then fell
+        # through to get_messages without re-verifying the chat — meaning an
+        # unresolved chat_id was used for indexing.  Tell the user to retry
+        # instead so the full flow runs cleanly after the rate limit clears.
+        logger.warning(f"FloodWait {fw.value}s on get_chat during index request from {message.from_user.id}")
+        return await message.reply(
+            f'⏳ Telegram is rate-limiting requests right now. Please try again in <b>{fw.value} seconds</b>.',
+            parse_mode=enums.ParseMode.HTML
+        )
     except Exception as e:
         logger.exception(e)
         return await message.reply('Something went wrong fetching that chat. Make sure the bot is a member/admin there.')
@@ -159,7 +166,6 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
         current = temp.CURRENT
         temp.CANCEL = False
 
-        # FIX: auto-resume loop — if FloodWait escapes iter_messages, sleep and retry
         while True:
             flood_hit = False
             try:
@@ -217,7 +223,6 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                         errors += 1
 
             except FloodWait as fw:
-                # FIX: auto-resume instead of stopping — update CURRENT and retry the loop
                 wait_secs = fw.value + 5
                 logger.warning(f"FloodWait {fw.value}s during indexing — auto-resuming from msg {current} after {wait_secs}s")
                 temp.CURRENT = current
@@ -241,7 +246,6 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                 return
 
             if not flood_hit:
-                # Completed without FloodWait — done
                 break
 
         await msg.edit(
