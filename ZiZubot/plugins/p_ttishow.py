@@ -180,7 +180,10 @@ async def re_enable_chat(bot, message):
     if not sts.get('is_disabled'):
         return await message.reply('This chat is not yet disabled.')
     await db.re_enable_chat(int(chat_))
-    temp.BANNED_CHATS.remove(int(chat_))
+    try:
+        temp.BANNED_CHATS.remove(int(chat_))
+    except ValueError:
+        pass  # already absent from in-memory list (bot restarted after ban)
     await message.reply("Chat Successfully re-enabled")
 
 
@@ -257,7 +260,10 @@ async def unban_a_user(bot, message):
         if not jar['is_banned']:
             return await message.reply(f"{k.mention} is not yet banned.")
         await db.remove_ban(k.id)
-        temp.BANNED_USERS.remove(k.id)
+        try:
+            temp.BANNED_USERS.remove(k.id)
+        except ValueError:
+            pass  # already absent from in-memory list (bot restarted after ban)
         await message.reply(f"Successfully unbanned {k.mention}")
 
 
