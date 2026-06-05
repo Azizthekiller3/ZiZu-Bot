@@ -1,0 +1,54 @@
+# ── Secrets & config ─────────────────────────────────────────────
+.env
+
+# ── Telegram session files ────────────────────────────────────────
+*.session
+*.session-shm
+*.session-wal
+
+# ── Logs ─────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Python cache ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual environments ──────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ── Build / dist ─────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ── IDE / editor ─────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS junk ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Temp files from batch/index ──────────────────────────────────
+*.txt.tmp
+users.txt
+chats.txt
+Indexed\ channels.txt
+
+# ── Replit internals ─────────────────────────────────────────────
+.replit
+replit.nix
+.breakpoints
+.pythonlibs/
