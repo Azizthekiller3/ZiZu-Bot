@@ -20,17 +20,6 @@ from Script import script
 from plugins.webcode import bot_run
 from os import environ
 from aiohttp import web as webserver
-import socket
-
-def find_free_port(start=8090, end=9000):
-    for port in range(start, end):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("0.0.0.0", port))
-                return port
-            except OSError:
-                continue
-    raise RuntimeError("No free port found")
 
 async def schedule_restart():
     await asyncio.sleep(86400)  # 24 hours
@@ -69,7 +58,7 @@ class Bot(Client):
         client = webserver.AppRunner(await bot_run())
         await client.setup()
         bind_address = "0.0.0.0"
-        port = find_free_port()
+        port = int(environ.get("PORT", 8000))
         await webserver.TCPSite(client, bind_address, port).start()
         logging.info(f"Web health-check running on port {port}")
         asyncio.create_task(schedule_restart()) #restart after 24 hrs clearing memory
