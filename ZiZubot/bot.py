@@ -21,10 +21,27 @@ from Script import script
 from plugins.webcode import bot_run
 from os import environ
 from aiohttp import web as webserver
+import aiohttp
 
 async def schedule_restart():
     await asyncio.sleep(86400)  # 24 hours
     os.execv(sys.executable, ['python'] + sys.argv)
+
+async def keep_alive_loop(port: int):
+    """Ping our own health endpoint every 4 minutes to prevent Koyeb from sleeping."""
+    # Use PUBLIC_URL env var if set, otherwise fall back to localhost
+    public_url = environ.get('PUBLIC_URL', '').rstrip('/')
+    local_url = f"http://localhost:{port}/"
+    ping_url = (public_url + '/') if public_url else local_url
+    await asyncio.sleep(60)  # wait 1 min before first ping
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(ping_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    logging.info(f"Keep-alive ping → {ping_url} [{resp.status}]")
+            except Exception as e:
+                logging.warning(f"Keep-alive ping failed: {e}")
+            await asyncio.sleep(240)  # ping every 4 minutes
 
 class Bot(Client):
 
@@ -52,7 +69,6 @@ class Bot(Client):
         self.username = '@' + me.username
         logging.info(f"{me.first_name} with for Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
         logging.info(LOG_STR)
-        # FIX: wrap LOG_CHANNEL message so a bad channel ID doesn't crash before webserver starts
         try:
             await self.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT)
         except Exception as e:
@@ -66,6 +82,7 @@ class Bot(Client):
         await webserver.TCPSite(client, bind_address, port).start()
         logging.info(f"Web health-check running on port {port}")
         asyncio.create_task(schedule_restart())
+        asyncio.create_task(keep_alive_loop(port))  # keep Koyeb awake
 
     async def stop(self, *args):
         await super().stop()
@@ -79,20 +96,13 @@ class Bot(Client):
     ) -> Optional[AsyncGenerator["types.Message", None]]:
         """Iterate through a chat sequentially, fetching in batches of up to 200.
         Handles FloodWait internally so indexing is never aborted by rate limits.
-
-        Parameters:
-            chat_id: Unique identifier or username of the target chat.
-            limit:   ID of the last message to fetch (inclusive upper bound).
-            offset:  ID of the first message to fetch (default 0).
         """
         current = offset
         while True:
-            # FIX: was current+new_diff+1 (off-by-one — fetched one extra per batch)
             new_diff = min(200, limit - current)
             if new_diff <= 0:
                 return
             ids = list(range(current, current + new_diff))
-            # FIX: handle FloodWait inside the generator so it doesn't abort indexing
             try:
                 messages = await self.get_messages(chat_id, ids)
             except FloodWait as fw:
