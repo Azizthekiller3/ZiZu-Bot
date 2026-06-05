@@ -35,9 +35,7 @@ async def auto_approve(client, join_request: ChatJoinRequest):
             try:
                 await client.send_message(
                     chat_id=join_request.from_user.id,
-                    text=f"🎉 You've been approved to join **{join_request.chat.title}**!
-
-Enjoy your stay 😄"
+                    text=f"🎉 You've been approved to join **{join_request.chat.title}**!\n\nEnjoy your stay 😄"
                 )
                 logger.info(f"Sent welcome DM to {join_request.from_user.first_name}")
             except Exception as pm_error:
@@ -84,9 +82,7 @@ async def check_status(client, message: Message):
     welcome_status = "✅ ON" if WELCOME_DM else "❌ OFF"
 
     await message.reply_text(
-        f"⚙️ **Current Settings:**
-"
-        f"• Auto-Approval: {approve_status}
-"
+        f"⚙️ **Current Settings:**\n"
+        f"• Auto-Approval: {approve_status}\n"
         f"• Welcome DM: {welcome_status}"
     )
