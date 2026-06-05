@@ -3,18 +3,19 @@
 # add to group or channel and gives admin rights only
 
 import os
+import logging
 from pyrogram import Client, filters
 from pyrogram.types import ChatJoinRequest, Message
 from info import ADMINS
 
-# ✅ Default auto-approve state (from .env)
+logger = logging.getLogger(__name__)
+
+# Default auto-approve state (from .env)
 AUTO_APPROVE = os.getenv("AUTO_APPROVE", "ON").upper() == "ON"
 
-# ✅ Default welcome DM state (from .env)
-WELCOME_DM = os.getenv("WELCOME_DM", "OFF").upper() == "OFF"
-
-# ✅ Multiple admin IDs allowed (space-separated)
-ADMINS = [int(i) for i in os.getenv("ADMINS", "").split()]  # e.g., "123456789 987654321"
+# Default welcome DM state (from .env)
+# FIX: was == "OFF" which inverted the logic — defaulted to ON instead of OFF
+WELCOME_DM = os.getenv("WELCOME_DM", "OFF").upper() == "ON"
 
 
 # --- AUTO APPROVE HANDLER ---
@@ -23,27 +24,27 @@ async def auto_approve(client, join_request: ChatJoinRequest):
     global AUTO_APPROVE, WELCOME_DM
 
     if not AUTO_APPROVE:
-        print("🚫 Auto-approval is OFF — ignoring join requests.")
+        logger.info("Auto-approval is OFF — ignoring join requests.")
         return
 
     try:
-        # Approve the user
         await client.approve_chat_join_request(join_request.chat.id, join_request.from_user.id)
-        print(f"✅ Approved: {join_request.from_user.first_name} ({join_request.from_user.id})")
+        logger.info(f"Approved: {join_request.from_user.first_name} ({join_request.from_user.id})")
 
-        # ✅ Send DM welcome message (only if enabled)
         if WELCOME_DM:
             try:
                 await client.send_message(
                     chat_id=join_request.from_user.id,
-                    text=f"🎉 You’ve been approved to join **{join_request.chat.title}**!\n\nEnjoy your stay 😄"
+                    text=f"🎉 You've been approved to join **{join_request.chat.title}**!
+
+Enjoy your stay 😄"
                 )
-                print(f"✉️ Sent welcome DM to {join_request.from_user.first_name}")
+                logger.info(f"Sent welcome DM to {join_request.from_user.first_name}")
             except Exception as pm_error:
-                print(f"⚠️ Couldn't DM {join_request.from_user.first_name}: {pm_error}")
+                logger.warning(f"Couldn't DM {join_request.from_user.first_name}: {pm_error}")
 
     except Exception as e:
-        print(f"❌ Error approving {join_request.from_user.id}: {e}")
+        logger.error(f"Error approving {join_request.from_user.id}: {e}")
 
 
 # --- ADMIN COMMANDS ---
@@ -54,11 +55,11 @@ async def toggle_auto_approve(client, message: Message):
     if message.command[0] == "approve_on":
         AUTO_APPROVE = True
         await message.reply_text("✅ Auto-approval has been **ENABLED**.")
-        print("🔛 Auto-approval enabled by admin.")
+        logger.info("Auto-approval enabled by admin.")
     elif message.command[0] == "approve_off":
         AUTO_APPROVE = False
         await message.reply_text("🚫 Auto-approval has been **DISABLED**.")
-        print("🔴 Auto-approval disabled by admin.")
+        logger.info("Auto-approval disabled by admin.")
 
 
 # --- WELCOME DM TOGGLE COMMANDS ---
@@ -69,11 +70,11 @@ async def toggle_welcome_dm(client, message: Message):
     if message.command[0] == "welcome_on":
         WELCOME_DM = True
         await message.reply_text("👋 Welcome DM has been **ENABLED**.")
-        print("💬 Welcome DM enabled by admin.")
+        logger.info("Welcome DM enabled by admin.")
     elif message.command[0] == "welcome_off":
         WELCOME_DM = False
         await message.reply_text("🤫 Welcome DM has been **DISABLED**.")
-        print("🚫 Welcome DM disabled by admin.")
+        logger.info("Welcome DM disabled by admin.")
 
 
 # --- STATUS COMMAND ---
@@ -83,7 +84,9 @@ async def check_status(client, message: Message):
     welcome_status = "✅ ON" if WELCOME_DM else "❌ OFF"
 
     await message.reply_text(
-        f"⚙️ **Current Settings:**\n"
-        f"• Auto-Approval: {approve_status}\n"
+        f"⚙️ **Current Settings:**
+"
+        f"• Auto-Approval: {approve_status}
+"
         f"• Welcome DM: {welcome_status}"
     )
