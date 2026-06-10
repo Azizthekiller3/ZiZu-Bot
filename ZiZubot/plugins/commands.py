@@ -8,7 +8,7 @@ from pyrogram.errors import ChatAdminRequired, FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from database.ia_filterdb import Media, get_file_details, unpack_new_file_id
 from database.users_chats_db import db
-from info import CHANNELS, ADMINS, AUTH_CHANNEL, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT
+from info import CHANNELS, ADMINS, AUTH_CHANNEL, BACKUP_CHANNEL, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT
 from utils import get_settings, get_size, is_subscribed, save_group_settings, temp
 from database.connections_mdb import active_connection
 from plugins.shortlink import consume_token
@@ -584,3 +584,59 @@ async def save_template(client, message):
     template = message.text.split(" ", 1)[1]
     await save_group_settings(grp_id, 'template', template)
     await sts.edit(f"Successfully changed template for {title} to\n\n{template}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  /setstatus — toggle bot-wide settings (admin only)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@Client.on_message(filters.command("setstatus") & filters.incoming)
+async def setstatus_cmd(client, message):
+    """Toggle force-subscribe and other global settings.
+    Usage: /setstatus forcesub on|off
+    """
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id or str(user_id) not in [str(a) for a in ADMINS]:
+        return await message.reply_text("⛔ You are not authorized to use this command.")
+
+    if len(message.command) < 3:
+        fs_status = "✅ ON" if temp.FORCESUB_BACKUP else "❌ OFF"
+        return await message.reply_text(
+            f"<b>🔧 Bot Status Settings</b>\n\n"
+            f"• Backup Channel Force-Sub: <b>{fs_status}</b>\n\n"
+            f"<b>Usage:</b>\n"
+            f"<code>/setstatus forcesub on</code> — require users to join backup channel\n"
+            f"<code>/setstatus forcesub off</code> — skip backup channel check",
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    setting = message.command[1].lower()
+    value   = message.command[2].lower()
+
+    if setting == "forcesub":
+        if value == "on":
+            temp.FORCESUB_BACKUP = True
+            await db.set_bot_setting('forcesub_backup', True)
+            await message.reply_text(
+                f"✅ <b>Backup channel force-subscribe is now ON.</b>\n\n"
+                f"Users must join @{BACKUP_CHANNEL} before receiving files.",
+                parse_mode=enums.ParseMode.HTML
+            )
+        elif value == "off":
+            temp.FORCESUB_BACKUP = False
+            await db.set_bot_setting('forcesub_backup', False)
+            await message.reply_text(
+                "❌ <b>Backup channel force-subscribe is now OFF.</b>\n\n"
+                "Files will be delivered without checking channel membership.",
+                parse_mode=enums.ParseMode.HTML
+            )
+        else:
+            await message.reply_text(
+                "⚠️ Invalid value. Use <code>on</code> or <code>off</code>.",
+                parse_mode=enums.ParseMode.HTML
+            )
+    else:
+        await message.reply_text(
+            "⚠️ Unknown setting. Available settings:\n• <code>forcesub</code>",
+            parse_mode=enums.ParseMode.HTML
+        )
