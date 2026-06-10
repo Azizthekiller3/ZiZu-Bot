@@ -9,7 +9,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from database.ia_filterdb import Media, get_file_details, unpack_new_file_id
 from database.users_chats_db import db
 from info import CHANNELS, ADMINS, AUTH_CHANNEL, BACKUP_CHANNEL, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, PROTECT_CONTENT
-from utils import get_settings, get_size, is_subscribed, save_group_settings, temp
+from utils import get_settings, get_size, is_subscribed, is_subscribed_backup, save_group_settings, temp
 from database.connections_mdb import active_connection
 from plugins.shortlink import consume_token
 import re
@@ -185,6 +185,26 @@ async def start(client, message):
         file_id = data
         pre = ""
 
+    # ── Backup channel force-subscribe gate ───────────────────────────────────
+    if BACKUP_CHANNEL and not await is_subscribed_backup(client, message):
+        join_btn = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+        ], [
+            InlineKeyboardButton("✅ I've Joined", url=f"https://t.me/{temp.U_NAME}?start={data}")
+        ]])
+        await client.send_message(
+            chat_id=message.from_user.id,
+            text=(
+                "⚠️ <b>Please join our backup channel to receive files!</b>\n\n"
+                "1️⃣ Tap <b>Join Backup Channel</b> below\n"
+                "2️⃣ Then tap <b>I've Joined ✅</b> to get your file"
+            ),
+            reply_markup=join_btn,
+            parse_mode=enums.ParseMode.HTML
+        )
+        return
+    # ──────────────────────────────────────────────────────────────────────────
+
     if data.split("-", 1)[0] == "BATCH":
         sts = await message.reply("Please wait")
         file_id = data.split("-", 1)[1]
@@ -225,7 +245,16 @@ async def start(client, message):
                 )
                 k = await client.send_message(
                     chat_id=message.from_user.id,
-                    text=f"<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n⚠️ File will be deleted in 10 Mins\n\n📌 Save or forward it.</blockquote>"
+                    text=(
+                        f"<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n"
+                        f"⚠️ File will be deleted in 10 Mins\n\n"
+                        f"📌 Save or forward it.\n\n"
+                        f"🔗 Join our backup channel: @{BACKUP_CHANNEL}</blockquote>"
+                    ),
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+                    ]]),
+                    parse_mode=enums.ParseMode.HTML
                 )
                 asyncio.create_task(delete_after_delay(m, k))
             except FloodWait as e:
@@ -239,7 +268,16 @@ async def start(client, message):
                 )
                 k = await client.send_message(
                     chat_id=message.from_user.id,
-                    text=f"<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n⚠️ File will be deleted in 10 Mins\n\n📌 Save or forward it.</blockquote>"
+                    text=(
+                        f"<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n"
+                        f"⚠️ File will be deleted in 10 Mins\n\n"
+                        f"📌 Save or forward it.\n\n"
+                        f"🔗 Join our backup channel: @{BACKUP_CHANNEL}</blockquote>"
+                    ),
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+                    ]]),
+                    parse_mode=enums.ParseMode.HTML
                 )
                 asyncio.create_task(delete_after_delay(m, k))
             except Exception as e:
@@ -323,7 +361,16 @@ async def start(client, message):
             await msg.edit_caption(f_caption)
             k = await client.send_message(
                 chat_id=message.from_user.id,
-                text=f"<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n⚠️ File will be deleted in 10 Mins\n\n📌 Save or forward it.</blockquote>"
+                text=(
+                    f"<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n"
+                    f"⚠️ File will be deleted in 10 Mins\n\n"
+                    f"📌 Save or forward it.\n\n"
+                    f"🔗 Join our backup channel: @{BACKUP_CHANNEL}</blockquote>"
+                ),
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+                ]]),
+                parse_mode=enums.ParseMode.HTML
             )
             asyncio.create_task(delete_after_delay(msg, k))
             return
@@ -356,7 +403,16 @@ async def start(client, message):
     )
     k = await client.send_message(
         chat_id=message.from_user.id,
-        text=f"<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n⚠️ File will be deleted in 10 Mins\n\n📌 Save or forward it.</blockquote>"
+        text=(
+            f"<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n"
+            f"⚠️ File will be deleted in 10 Mins\n\n"
+            f"📌 Save or forward it.\n\n"
+            f"🔗 Join our backup channel: @{BACKUP_CHANNEL}</blockquote>"
+        ),
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+        ]]),
+        parse_mode=enums.ParseMode.HTML
     )
     asyncio.create_task(delete_after_delay(m, k))
 
