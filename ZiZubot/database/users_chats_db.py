@@ -9,6 +9,7 @@ class Database:
         self.db = self._client[database_name]
         self.col = self.db.users
         self.grp = self.db.groups
+        self.cfg = self.db.bot_settings
 
 
     def new_user(self, id, name):
@@ -141,6 +142,19 @@ class Database:
 
     async def get_db_size(self):
         return (await self.db.command("dbstats"))['dataSize']
+
+    async def get_bot_setting(self, key, default=None):
+        doc = await self.cfg.find_one({'_id': 'global'})
+        if doc:
+            return doc.get(key, default)
+        return default
+
+    async def set_bot_setting(self, key, value):
+        await self.cfg.update_one(
+            {'_id': 'global'},
+            {'$set': {key: value}},
+            upsert=True
+        )
 
 
 db = Database(DATABASE_URI, DATABASE_NAME)
