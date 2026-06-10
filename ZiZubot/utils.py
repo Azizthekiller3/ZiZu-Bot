@@ -1,6 +1,6 @@
 import logging
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid
-from info import AUTH_CHANNEL, LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
+from info import AUTH_CHANNEL, BACKUP_CHANNEL, LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
 from imdb import Cinemagoer
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton
@@ -49,6 +49,25 @@ async def is_subscribed(bot, query):
     except Exception as e:
         logger.exception(e)
         return False
+    else:
+        if user.status != enums.ChatMemberStatus.BANNED:
+            return True
+    return False
+
+
+async def is_subscribed_backup(bot, query):
+    """Check if the user is a member of the backup channel."""
+    if not BACKUP_CHANNEL:
+        return True
+    try:
+        channel = BACKUP_CHANNEL if BACKUP_CHANNEL.startswith('@') else f"@{BACKUP_CHANNEL}"
+        user = await bot.get_chat_member(channel, query.from_user.id)
+    except UserNotParticipant:
+        return False
+    except Exception as e:
+        # Fail open: if the bot isn't in the channel or can't check, don't block delivery
+        logger.warning(f"is_subscribed_backup check failed: {e}")
+        return True
     else:
         if user.status != enums.ChatMemberStatus.BANNED:
             return True
