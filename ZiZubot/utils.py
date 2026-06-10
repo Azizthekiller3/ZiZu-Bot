@@ -39,6 +39,7 @@ class temp(object):
     U_NAME = None
     B_NAME = None
     SETTINGS = {}
+    FORCESUB_BACKUP = True
 
 async def is_subscribed(bot, query):
     try:
@@ -56,7 +57,10 @@ async def is_subscribed(bot, query):
 
 
 async def is_subscribed_backup(bot, query):
-    """Check if the user is a member of the backup channel."""
+    """Check if the user is a member of the backup channel.
+    Returns True immediately if force-sub is disabled via /setstatus."""
+    if not temp.FORCESUB_BACKUP:
+        return True
     if not BACKUP_CHANNEL:
         return True
     try:
