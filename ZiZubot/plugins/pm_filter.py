@@ -9,12 +9,12 @@ from Script import script
 import pyrogram
 from database.connections_mdb import active_connection, all_connections, delete_connection, if_active, make_active, \
     make_inactive
-from info import ADMINS, AUTH_CHANNEL, AUTH_USERS, CUSTOM_FILE_CAPTION, AUTH_GROUPS, P_TTI_SHOW_OFF, IMDB, \
+from info import ADMINS, AUTH_CHANNEL, BACKUP_CHANNEL, AUTH_USERS, CUSTOM_FILE_CAPTION, AUTH_GROUPS, P_TTI_SHOW_OFF, IMDB, \
     SINGLE_BUTTON, SPELL_CHECK_REPLY, IMDB_TEMPLATE
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, QueryIdInvalid
-from utils import get_size, is_subscribed, get_poster, search_gagala, temp, get_settings, save_group_settings
+from utils import get_size, is_subscribed, is_subscribed_backup, get_poster, search_gagala, temp, get_settings, save_group_settings
 from database.users_chats_db import db
 from database.ia_filterdb import Media, get_file_details, get_search_results
 from database.filters_mdb import (
@@ -625,6 +625,27 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 # Shortlink API failed — fall through and send file directly
             # ──────────────────────────────────────────────────────────────
 
+            # ── Backup channel force-subscribe gate ───────────────────────
+            if BACKUP_CHANNEL and not await is_subscribed_backup(client, query):
+                join_btn = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+                ], [
+                    InlineKeyboardButton("✅ I've Joined", callback_data=f"{ident}#{file_id}")
+                ]])
+                await safe_answer(query)
+                await client.send_message(
+                    chat_id=query.from_user.id,
+                    text=(
+                        "⚠️ <b>Please join our backup channel to receive files!</b>\n\n"
+                        "1️⃣ Tap <b>Join Backup Channel</b> below\n"
+                        "2️⃣ Then tap <b>I've Joined ✅</b> to get your file"
+                    ),
+                    reply_markup=join_btn,
+                    parse_mode=enums.ParseMode.HTML
+                )
+                return
+            # ──────────────────────────────────────────────────────────────
+
             await client.send_cached_media(
                 chat_id=query.from_user.id,
                 file_id=file_id,
@@ -638,7 +659,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     "⚠️ File will be deleted in 10 Mins\n\n"
                     "📌 Save or forward it.\n\n"
                     "🔗 Join our backup channel: @BackupChannel5211</blockquote>"
-                )
+                ),
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔗 Join Backup Channel", url="https://t.me/BackupChannel5211")
+                ]])
             )
             await safe_answer(query, '**Already Sent In your Pm**', show_alert=True)
         except UserIsBlocked:
@@ -654,6 +678,25 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await safe_answer(query, "I Like Your Smartness, But Don't Be Oversmart 😒", show_alert=True)
             return
         ident, file_id = query.data.split("#")
+        # ── Backup channel force-subscribe gate ───────────────────────────
+        if BACKUP_CHANNEL and not await is_subscribed_backup(client, query):
+            join_btn = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+            ], [
+                InlineKeyboardButton("✅ I've Joined", callback_data=f"{ident}#{file_id}")
+            ]])
+            await safe_answer(query)
+            await query.message.reply(
+                text=(
+                    "⚠️ <b>Please join our backup channel to receive files!</b>\n\n"
+                    "1️⃣ Tap <b>Join Backup Channel</b> below\n"
+                    "2️⃣ Then tap <b>I've Joined ✅</b> to get your file"
+                ),
+                reply_markup=join_btn,
+                parse_mode=enums.ParseMode.HTML
+            )
+            return
+        # ─────────────────────────────────────────────────────────────────
         files_ = await get_file_details(file_id)
         if not files_:
             return await safe_answer(query, 'No such file exist.')
@@ -687,7 +730,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "⚠️ File will be deleted in 10 Mins\n\n"
                 "📌 Save or forward it.\n\n"
                 "🔗 Join our backup channel: @BackupChannel5211</blockquote>"
-            )
+            ),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔗 Join Backup Channel", url="https://t.me/BackupChannel5211")
+            ]])
         )
         await asyncio.sleep(600)
         await m.delete()
