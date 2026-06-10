@@ -631,6 +631,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 caption=f_caption,
                 protect_content=True if ident == "filep" else False
             )
+            await client.send_message(
+                chat_id=query.from_user.id,
+                text=(
+                    "<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n"
+                    "⚠️ File will be deleted in 10 Mins\n\n"
+                    "📌 Save or forward it.\n\n"
+                    "🔗 Join our backup channel: @BackupChannel5211</blockquote>"
+                )
+            )
             await safe_answer(query, '**Already Sent In your Pm**', show_alert=True)
         except UserIsBlocked:
             await safe_answer(query, 'Unblock the bot mahn !', show_alert=True)
@@ -676,7 +685,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             text=(
                 "<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n"
                 "⚠️ File will be deleted in 10 Mins\n\n"
-                "📌 Save or forward it.</blockquote>"
+                "📌 Save or forward it.\n\n"
+                "🔗 Join our backup channel: @BackupChannel5211</blockquote>"
             )
         )
         await asyncio.sleep(600)
