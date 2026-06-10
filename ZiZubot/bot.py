@@ -39,9 +39,7 @@ async def schedule_restart():
 
 async def keep_alive_loop(port: int):
     """Ping our own health endpoint every 4 minutes to prevent Koyeb from sleeping."""
-    public_url = environ.get('PUBLIC_URL', '').rstrip('/')
-    local_url = f"http://localhost:{port}/"
-    ping_url = (public_url + '/') if public_url else local_url
+    ping_url = f"http://127.0.0.1:{port}/"
     await asyncio.sleep(60)
     async with aiohttp.ClientSession() as session:
         while True:
