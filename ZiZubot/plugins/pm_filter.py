@@ -658,11 +658,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     "<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n"
                     "⚠️ File will be deleted in 10 Mins\n\n"
                     "📌 Save or forward it.\n\n"
-                    "🔗 Join our backup channel: @BackupChannel5211</blockquote>"
+                    f"🔗 Join our backup channel: @{BACKUP_CHANNEL}</blockquote>"
                 ),
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔗 Join Backup Channel", url="https://t.me/BackupChannel5211")
-                ]])
+                    InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+                ]]),
+                parse_mode=enums.ParseMode.HTML
             )
             await safe_answer(query, '**Already Sent In your Pm**', show_alert=True)
         except UserIsBlocked:
@@ -686,7 +687,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 InlineKeyboardButton("✅ I've Joined", callback_data=f"{ident}#{file_id}")
             ]])
             await safe_answer(query)
-            await query.message.reply(
+            await client.send_message(
+                chat_id=query.from_user.id,
                 text=(
                     "⚠️ <b>Please join our backup channel to receive files!</b>\n\n"
                     "1️⃣ Tap <b>Join Backup Channel</b> below\n"
@@ -729,11 +731,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "<blockquote><b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\n"
                 "⚠️ File will be deleted in 10 Mins\n\n"
                 "📌 Save or forward it.\n\n"
-                "🔗 Join our backup channel: @BackupChannel5211</blockquote>"
+                f"🔗 Join our backup channel: @{BACKUP_CHANNEL}</blockquote>"
             ),
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔗 Join Backup Channel", url="https://t.me/BackupChannel5211")
-            ]])
+                InlineKeyboardButton("🔗 Join Backup Channel", url=f"https://t.me/{BACKUP_CHANNEL}")
+            ]]),
+            parse_mode=enums.ParseMode.HTML
         )
         await asyncio.sleep(600)
         await m.delete()
